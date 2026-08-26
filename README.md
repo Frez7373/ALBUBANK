@@ -4,11 +4,36 @@ A simple central banking network for Minecraft 1.16.5 with CC:Tweaked.
 
 ## Files
 
+- `installer.lua` — interactive installer. Lets you choose which ALBU BANK component to install.
 - `bank_computer.lua` — central bank operator computer. It starts `bank_server.lua` and provides the bank menu.
 - `bank_server.lua` — central server. Stores accounts, cards, terminals and transaction logs in files.
 - `atm.lua` — ATM. Reads an ALBU card from a disk drive and shows card information, balance and transactions.
 - `store_terminal.lua` — shop terminal. First launch registers it to the store owner's card. After that it accepts customer payments.
 - `lib/bank_client.lua` — shared network/client library.
+
+## Installer
+
+The easiest way to install the system is to put `installer.lua` on a CC:Tweaked computer and run:
+
+```text
+installer
+```
+
+The installer provides these choices:
+
+```text
+1. Central Bank Computer
+2. ATM
+3. Store Terminal
+4. Bank Server only
+5. Everything
+6. Custom component
+7. Exit
+```
+
+The installer automatically downloads the selected files from this repository and creates `/lib` when it is needed. The central bank option installs both `bank_computer.lua` and its required `bank_server.lua` and shared library. ATM and Store Terminal automatically receive the shared client library.
+
+The computer must have the CC:Tweaked HTTP API enabled because the installer downloads files over HTTPS from GitHub.
 
 ## Network
 
@@ -45,9 +70,9 @@ Each account has its own `.dat` file. Each account also has its own transaction 
 
 An ALBU card is a writable floppy disk. The bank computer writes `/albu_card.dat` to the card. The card contains the card ID and account ID. The PIN is kept only on the bank server's card record, not on the physical card file.
 
-## Setup
+## Manual setup
 
-Copy the files into CC:Tweaked like this:
+The programs can also be copied manually:
 
 ```text
 /bank_computer.lua
