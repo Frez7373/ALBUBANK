@@ -29,6 +29,7 @@ local components = {
         name = "Store Terminal",
         files = {
             {remote = "store_terminal.lua", localPath = "/store_terminal.lua"},
+            {remote = "store_terminal_v2.lua", localPath = "/store_terminal_v2.lua"},
             {remote = "lib/bank_client.lua", localPath = "/lib/bank_client.lua"}
         }
     },
