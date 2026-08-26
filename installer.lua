@@ -4,8 +4,10 @@
 local BASE="https://raw.githubusercontent.com/Frez7373/ALBUBANK/main/"
 local items={
  ["1"]={name="ATM",files={{"atm.lua","/atm.lua"},{"lib/bank_client.lua","/lib/bank_client.lua"}}},
- ["2"]={name="Bank Computer",files={{"bank_computer.lua","/bank_computer.lua"},{"bank_computer_v2.lua","/bank_computer_v2.lua"},{"bank_server.lua","/bank_server.lua"},{"bank_server_v2.lua","/bank_server_v2.lua"},{"lib/bank_client.lua","/lib/bank_client.lua"}}},
- ["3"]={name="Store Terminal",files={{"store_terminal.lua","/store_terminal.lua"},{"store_terminal_v2.lua","/store_terminal_v2.lua"},{"lib/bank_client.lua","/lib/bank_client.lua"}}}
+ ["2"]={name="Bank Computer",files={{"bank_computer.lua","/bank_computer.lua"},{"bank_computer_v2.lua","/bank_computer_v2.lua"},{"lib/bank_client.lua","/lib/bank_client.lua"}}},
+ ["3"]={name="Bank Server",files={{"bank_server.lua","/bank_server.lua"},{"bank_server_v2.lua","/bank_server_v2.lua"}}},
+ ["4"]={name="Store Terminal",files={{"store_terminal.lua","/store_terminal.lua"},{"store_terminal_v2.lua","/store_terminal_v2.lua"},{"lib/bank_client.lua","/lib/bank_client.lua"}}},
+ ["5"]={name="Full Bank Package",files={{"bank_computer.lua","/bank_computer.lua"},{"bank_computer_v2.lua","/bank_computer_v2.lua"},{"bank_server.lua","/bank_server.lua"},{"bank_server_v2.lua","/bank_server_v2.lua"},{"atm.lua","/atm.lua"},{"store_terminal.lua","/store_terminal.lua"},{"store_terminal_v2.lua","/store_terminal_v2.lua"},{"lib/bank_client.lua","/lib/bank_client.lua"}}}
 }
 
 local function clear() term.clear() term.setCursorPos(1,1) end
@@ -18,7 +20,8 @@ local function download(remote,path)
  if not r then return false,tostring(e or "HTTP error") end
  local data=r.readAll(); r.close()
  if not data or #data==0 then return false,"Empty download" end
- fs.makeDir(fs.getDir(path))
+ local dir=fs.getDir(path)
+ if dir and dir~="" then fs.makeDir(dir) end
  local h=fs.open(path,"w")
  if not h then return false,"Cannot write "..path end
  h.write(data); h.close(); return true
@@ -40,12 +43,14 @@ while true do
  header()
  print("1. ATM")
  print("2. Bank Computer")
- print("3. Store Terminal")
- print("4. Exit")
+ print("3. Bank Server")
+ print("4. Store Terminal")
+ print("5. Full Bank Package")
+ print("6. Exit")
  print("")
  write("> ")
  local c=read()
  if items[c] then install(items[c]); pause()
- elseif c=="4" then clear(); print("Installer closed."); break
+ elseif c=="6" then clear(); print("Installer closed."); break
  else print("Invalid choice."); sleep(0.7) end
 end
