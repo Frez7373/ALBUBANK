@@ -39,7 +39,7 @@ local function writeCard(card)
         return false
     end
 
-    drive.setDiskLabel("ATM CARD CCI™")
+    drive.setDiskLabel("ATM CARD CCI")
 
     local h = fs.open(mount .. "/albu_card.dat", "w")
     if not h then
