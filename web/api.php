@@ -89,7 +89,6 @@ if ($action === 'login') {
     $pin=trim((string)($body['pin'] ?? ''));
     if (!preg_match('/^ACC-[0-9]{6}$/',$accountId) || !preg_match('/^\d{4}$/',$pin)) json_response(['success'=>false,'error'=>'INVALID_CREDENTIALS_FORMAT'],400);
 
-    // First find the card ID from the authoritative bank account record.
     [$sent,$lookup,$err]=create_bank_request('account_lookup',['account_id'=>$accountId]);
     if (!$sent) json_response(['success'=>false,'error'=>$err],503);
     if (($lookup['ok'] ?? false)!==true) json_response(['success'=>false,'error'=>bank_error_to_text((string)($lookup['error'] ?? 'LOGIN_FAILED'))],401);
@@ -130,6 +129,9 @@ switch ($action) {
         $description=trim((string)($body['description'] ?? ''));
         if (!preg_match('/^ACC-[0-9]{6}$/',$destination) || $amount<=0) json_response(['success'=>false,'error'=>'INVALID_TRANSFER_DATA'],400);
         [$sent,$result,$err]=create_bank_request('transfer',['card_id'=>$cardId,'pin'=>$pin,'destination_account_id'=>$destination,'amount'=>$amount,'description'=>$description]);
+        break;
+    case 'block_card':
+        [$sent,$result,$err]=create_bank_request('web_set_card_status',['card_id'=>$cardId,'pin'=>$pin,'status'=>'blocked']);
         break;
     default:
         json_response(['success'=>false,'error'=>'UNKNOWN_ACTION'],400);
