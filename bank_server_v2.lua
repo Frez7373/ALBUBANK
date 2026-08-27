@@ -87,6 +87,31 @@ local function authenticateCard(cardId, pin)
     return c,a,nil
 end
 
+local function webLogin(accountId, pin)
+    accountId = tostring(accountId or "")
+    pin = tostring(pin or "")
+    local a = account(accountId)
+    if not a then return nil,"ACCOUNT_NOT_FOUND" end
+    if a.status ~= "active" then return nil,"ACCOUNT_BLOCKED" end
+
+    local c = card(a.card_id)
+    if not c then return nil,"CARD_NOT_FOUND" end
+    if c.status ~= "active" then return nil,"CARD_BLOCKED" end
+    if tostring(c.pin) ~= pin then return nil,"INVALID_PIN" end
+
+    return {
+        id=a.id,
+        owner_name=a.owner_name,
+        balance=a.balance,
+        currency=a.currency,
+        card_id=c.id,
+        card_status=c.status,
+        account_status=a.status,
+        created_at=a.created_at,
+        updated_at=a.updated_at
+    }
+end
+
 local function validPin(pin)
     pin = tostring(pin or "")
     return pin:match("^%d%d%d%d$") ~= nil
@@ -124,6 +149,47 @@ local function changeBalance(aid, amount, mode, description)
     if not save(accountPath(a.id),a) then return nil,"ACCOUNT_FILE_ERROR" end
     appendTx(a.id,{id=txid(),account_id=a.id,type=mode,amount=(mode=="withdraw" and -amount or amount),balance_after=a.balance,currency=a.currency,description=description or mode,timestamp=now()})
     return safeAccount(a)
+end
+
+local function transfer(fromId, toId, amount, description)
+    fromId=tostring(fromId or "")
+    toId=tostring(toId or "")
+    amount=tonumber(amount)
+    if fromId == "" or toId == "" then return nil,"INVALID_ACCOUNT_ID" end
+    if fromId == toId then return nil,"SAME_ACCOUNT" end
+    if not amount or amount <= 0 then return nil,"INVALID_AMOUNT" end
+
+    local from=account(fromId)
+    if not from then return nil,"SOURCE_ACCOUNT_NOT_FOUND" end
+    local to=account(toId)
+    if not to then return nil,"DESTINATION_ACCOUNT_NOT_FOUND" end
+    if from.status ~= "active" or to.status ~= "active" then return nil,"ACCOUNT_BLOCKED" end
+    if from.balance < amount then return nil,"INSUFFICIENT_FUNDS" end
+
+    local beforeFrom=from.balance
+    local beforeTo=to.balance
+    local tnow=now()
+
+    from.balance=from.balance-amount
+    to.balance=to.balance+amount
+    from.updated_at=tnow
+    to.updated_at=tnow
+
+    if not save(accountPath(from.id),from) then return nil,"SOURCE_SAVE_ERROR" end
+    if not save(accountPath(to.id),to) then
+        from.balance=beforeFrom
+        from.updated_at=tnow
+        save(accountPath(from.id),from)
+        return nil,"DESTINATION_SAVE_ERROR"
+    end
+
+    local id=txid()
+    local text=description and tostring(description) or "Web transfer"
+    if text == "" then text="Web transfer" end
+    appendTx(from.id,{id=id,account_id=from.id,type="transfer",amount=-amount,balance_after=from.balance,currency="USD",counterparty=to.id,description=text,timestamp=tnow})
+    appendTx(to.id,{id=id,account_id=to.id,type="transfer_received",amount=amount,balance_after=to.balance,currency="USD",counterparty=from.id,description=text,timestamp=tnow})
+
+    return {transaction_id=id,amount=amount,from=safeAccount(from),to=safeAccount(to),previous_to_balance=beforeTo}
 end
 
 local function getTransactions(cardId,pin,limit)
@@ -193,18 +259,35 @@ local function payment(data)
     return {transaction_id=id,amount=amount,customer=safeAccount(from),merchant={account_id=to.id,owner_name=to.owner_name,terminal_id=t.id,terminal_name=t.name,balance=to.balance}}
 end
 
+local function setCardStatusForWeb(cardId,pin,status)
+    local c,a,err=authenticateCard(cardId,pin)
+    if not c then return nil,err end
+    if status ~= "active" and status ~= "blocked" then return nil,"INVALID_STATUS" end
+    c.status=status
+    if not save(cardPath(c.id),c) then return nil,"CARD_FILE_ERROR" end
+    return {card_id=c.id,status=c.status}
+end
+
 local function process(m)
     local d=m.data or {}
     local id=m.request_id
     if m.action=="ping" then return response(id,true,{server="ALBU_BANK",time=now()}) end
     if m.action=="create_account" then local r,e=createAccount(d.owner_name,d.initial_balance,d.pin); return response(id,r~=nil,r,e) end
     if m.action=="account_lookup" then local a=account(d.account_id); return response(id,a~=nil,safeAccount(a),a and nil or "ACCOUNT_NOT_FOUND") end
+    if m.action=="web_login" then local r,e=webLogin(d.account_id,d.pin); return response(id,r~=nil,r,e) end
     if m.action=="card_info" then local c,a,e=authenticateCard(d.card_id,d.pin); if not c then return response(id,false,nil,e) end; return response(id,true,{card_id=c.id,account_id=a.id,owner_name=a.owner_name,balance=a.balance,currency=a.currency,card_status=c.status,account_status=a.status,created_at=a.created_at}) end
     if m.action=="balance" then local c,a,e=authenticateCard(d.card_id,d.pin); if not c then return response(id,false,nil,e) end; return response(id,true,safeAccount(a)) end
     if m.action=="transactions" then local r,e=getTransactions(d.card_id,d.pin,d.limit); return response(id,r~=nil,r,e) end
     if m.action=="deposit" then local r,e=changeBalance(d.account_id,d.amount,"deposit",d.description); return response(id,r~=nil,r,e) end
     if m.action=="withdraw" then local r,e=changeBalance(d.account_id,d.amount,"withdraw",d.description); return response(id,r~=nil,r,e) end
-    if m.action=="set_card_status" then local c=card(d.card_id); if not c then return response(id,false,nil,"CARD_NOT_FOUND") end; if d.status~="active" and d.status~="blocked" then return response(id,false,nil,"INVALID_STATUS") end; c.status=d.status; save(cardPath(c.id),c); return response(id,true,{card_id=c.id,status=c.status}) end
+    if m.action=="transfer" then
+        local c,a,e=authenticateCard(d.card_id,d.pin)
+        if not c then return response(id,false,nil,e) end
+        local r,err=transfer(a.id,d.destination_account_id,d.amount,d.description)
+        return response(id,r~=nil,r,err)
+    end
+    if m.action=="set_card_status" then local c=card(d.card_id); if not c then return response(id,false,nil,"CARD_NOT_FOUND") end; if d.status~="active" and d.status~="blocked" then return response(id,false,nil,"INVALID_STATUS") end; if not save(cardPath(c.id),{id=c.id,account_id=c.account_id,owner_name=c.owner_name,pin=c.pin,status=d.status,created_at=c.created_at}) then return response(id,false,nil,"CARD_FILE_ERROR") end; return response(id,true,{card_id=c.id,status=d.status}) end
+    if m.action=="web_set_card_status" then local r,e=setCardStatusForWeb(d.card_id,d.pin,d.status); return response(id,r~=nil,r,e) end
     if m.action=="register_terminal" then local r,e=registerTerminal(d.card_id,d.pin,d.terminal_name); return response(id,r~=nil,r,e) end
     if m.action=="re_register_terminal" then local r,e=registerTerminal(d.owner_card_id,d.owner_pin,d.terminal_name,d.terminal_id); return response(id,r~=nil,r,e) end
     if m.action=="terminal_info" then local t=terminal(d.terminal_id); return response(id,t~=nil,t,t and nil or "TERMINAL_NOT_FOUND") end
